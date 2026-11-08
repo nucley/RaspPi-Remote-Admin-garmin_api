@@ -1,6 +1,6 @@
 # RaspPi-Remote Admin (Garmin IQ)
 
-A script for the secure installation of an API to control and monitor your Raspberry Pi directly from a Garmin watch (via Tailscale Funnel) – 30-Slot Admin Edition.
+A script for the secure installation of an API to control and monitor your Raspberry Pi directly from a Garmin watch (via your own domain behind a reverse proxy, e.g. Nginx Proxy Manager) – 30-Slot Admin Edition.
 
 ## Built-in Ready-to-Use Commands (Slots 1–8)
 1. **`pi_status`** – CPU usage/freq, temperature, RAM, load, uptime, top process, active SSH sessions
@@ -9,7 +9,7 @@ A script for the secure installation of an API to control and monitor your Raspb
 4. **`userservices`** – Status summary of custom systemd services (`ON` / `OFF` / `ERR`)
 5. **`docker_status`** – Running and stopped Docker containers overview
 6. **`top_hogs`** – Top 3 CPU and Top 3 RAM consuming processes
-7. **`net_info`** – LAN IP, Tailscale VPN IP, Wi-Fi signal %, Ping latency, total RX traffic
+7. **`net_info`** – LAN IP, Wi-Fi signal %, Ping latency, total RX traffic
 8. **`reboot_pi`** – Safe background reboot
 
 *Slots up to 30 (`custom_slot1` – `custom_slot30`) are pre-configured and can be easily overridden by adding your own aliases in `~/.bash_aliases`.*
@@ -18,4 +18,7 @@ A script for the secure installation of an API to control and monitor your Raspb
 Run the following command in your Raspberry Pi terminal:
 
 ```bash
-curl -sSL [https://raw.githubusercontent.com/piotrkuzemczak-stack/RaspPi-Remote-Admin-garmin_api/main/garmin-admin-install.sh](https://raw.githubusercontent.com/piotrkuzemczak-stack/RaspPi-Remote-Admin-garmin_api/main/garmin-admin-install.sh) | sudo bash
+curl -sSL https://raw.githubusercontent.com/piotrkuzemczak-stack/RaspPi-Remote-Admin-garmin_api/main/garmin-admin-install.sh | sudo bash
+```
+
+Defaults: domain `garmin.serverfra.ch`, listens on `127.0.0.1:8082`. Override with `DOMAIN=... API_PORT=... API_HOST=...`. Point your NPM proxy host at `http://127.0.0.1:8082` (or the host IP if NPM runs in Docker; then set `API_HOST=0.0.0.0`).

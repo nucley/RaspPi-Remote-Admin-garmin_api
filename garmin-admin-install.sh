@@ -38,13 +38,14 @@ systemctl stop rasppi-remote.service 2>/dev/null || true
 SAVED_DOMAIN=""
 SECRET_TOKEN=""
 SAVED_PORT=""
+SAVED_HOST=""
 if [ -f /etc/default/rasppi-remote ]; then
     SECRET_TOKEN=$(grep "^SECURITY_TOKEN=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
-    SAVED_DOMAIN=$(grep "^TS_DOMAIN=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
+    SAVED_DOMAIN=$(grep "^DOMAIN=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
     SAVED_PORT=$(grep "^API_PORT=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
 fi
 
-API_PORT=${API_PORT:-${SAVED_PORT:-8081}}
+API_PORT=${API_PORT:-${SAVED_PORT:-8082}}
 
 # Verify if port is free; if occupied by another service, find the next available port
 while ss -tulpn 2>/dev/null | grep -q ":${API_PORT} "; do
@@ -65,74 +66,12 @@ echo -e "${GREEN}[+] Automated configuration:${NC}"
 echo -e "    - Internal Port: ${YELLOW}$API_PORT${NC}"
 echo -e "    - ${TOKEN_MSG}\n"
 
-# Step 2: Tailscale & Funnel Authorization
-echo -e "${YELLOW}[Step 2/4] Setting up Tailscale & Funnel...${NC}"
-if ! command -v tailscale &> /dev/null; then
-    echo -e "Tailscale not found. Installing..."
-    curl -fsSL https://tailscale.com/install.sh | sh > /dev/null 2>&1
-fi
-
-systemctl enable --now tailscaled > /dev/null 2>&1 || true
-
-if ! tailscale status &> /dev/null; then
-    echo -e "${YELLOW}Tailscale is not logged in. Starting authentication...${NC}"
-    if [ -r /dev/tty ]; then
-        tailscale up < /dev/tty
-    else
-        tailscale up
-    fi
-fi
-
-echo "Configuring Tailscale Funnel..."
-# Reset existing serve/funnel config to prevent 'listener already exists' errors
-tailscale serve reset > /dev/null 2>&1 || true
-
-# timeout 6 prevents tailscale CLI from hanging forever if Funnel awaits browser authorization
-FUNNEL_OUT=$(timeout 6 tailscale funnel --bg "$API_PORT" </dev/null 2>&1 || true)
-
-if echo "$FUNNEL_OUT" | grep -q "login.tailscale.com" || echo "$FUNNEL_OUT" | grep -q "allow"; then
-    ACL_LINK=$(echo "$FUNNEL_OUT" | grep -o 'https://login.tailscale.com[^ ]*' | head -n1 | tr -d '[:space:]')
-    
-    echo -e "\n${YELLOW}============================================================${NC}"
-    echo -e "${CYAN} [i]  INSTALLATION PAUSED - WAITING FOR YOUR ACTION  [i] ${NC}"
-    echo -e "${YELLOW}============================================================${NC}"
-    echo -e "To make your Raspberry Pi securely accessible to your watch,"
-    echo -e "you must allow 'Funnel' in your Tailscale account."
-    echo -e "\n${CYAN}1. Open this link in your web browser:${NC}"
-    echo -e "${GREEN}${ACL_LINK}${NC}"
-    echo -e "\n${CYAN}2. Enable/Allow the Funnel setting for this device.${NC}"
-    echo -e "${YELLOW}============================================================${NC}\n"
-    
-    if [ -r /dev/tty ]; then
-        read -r -p "-> Press the [ENTER] key on your keyboard after enabling Funnel... " < /dev/tty
-    else
-        echo "Waiting 15 seconds for Funnel authorization..."
-        sleep 15
-    fi
-    
-    tailscale serve reset > /dev/null 2>&1 || true
-    timeout 10 tailscale funnel --bg "$API_PORT" </dev/null > /dev/null 2>&1 || true
-fi
-
-TS_DOMAIN=""
-case "$SAVED_DOMAIN" in
-    ""|"null") TS_DOMAIN="" ;;
-    *) TS_DOMAIN="$SAVED_DOMAIN" ;;
-esac
-
-case "$TS_DOMAIN" in
-    ""|"null")
-        TS_DOMAIN=$(tailscale status --json 2>/dev/null | jq -r .Self.DNSName 2>/dev/null | tr -d '\r' | sed 's/\.$//' | head -n1 | tr -d '[:space:]' || true)
-        ;;
-esac
-
-case "$TS_DOMAIN" in
-    ""|"null")
-        TS_DOMAIN=$(hostname -f 2>/dev/null | tr -d '\r' | head -n1 | tr -d '[:space:]' || hostname | tr -d '\r' | head -n1 | tr -d '[:space:]' || true)
-        ;;
-esac
-
-echo -e "${GREEN}[+] Tailscale Funnel active on: https://${TS_DOMAIN} (proxy -> 127.0.0.1:${API_PORT})${NC}\n"
+# Step 2: Domain configuration (reverse proxy handled externally, e.g. Nginx Proxy Manager)
+echo -e "${YELLOW}[Step 2/4] Configuring domain...${NC}"
+DOMAIN=${DOMAIN:-${SAVED_DOMAIN:-garmin.serverfra.ch}}
+API_HOST=${API_HOST:-${SAVED_HOST:-127.0.0.1}}
+echo -e "${GREEN}[+] Public URL: https://${DOMAIN} -> NPM -> http://${API_HOST}:${API_PORT}${NC}
+"
 
 # Step 3: Application Structure & API Code
 echo -e "${YELLOW}[Step 3/4] Creating secure API application and helper scripts...${NC}"
@@ -188,7 +127,7 @@ for f in /etc/systemd/system/*.service; do
     [ -e "$f" ] || continue
     fname=$(basename "$f" .service)
     case "$fname" in
-        systemd-*|dbus*|ssh|sshd|cron|rsyslog|syslog|networking|NetworkManager*|wpa_supplicant*|avahi-daemon*|bluetooth*|triggerhappy*|ModemManager*|polkit*|udisks2*|tailscaled|rasppi-remote|docker*|containerd*|lightdm*|alsa-*|cups*|nfs-*|rpc-*|smartmontools*|e2scrub*|fstrim*|apt-*|dpkg-*|man-db*|logrotate*|getty*|serial-getty*|user@*|console-setup*|keyboard-setup*|fake-hwclock*|raspi-config*|rpi-eeprom-update*|dphys-swapfile*)
+        systemd-*|dbus*|ssh|sshd|cron|rsyslog|syslog|networking|NetworkManager*|wpa_supplicant*|avahi-daemon*|bluetooth*|triggerhappy*|ModemManager*|polkit*|udisks2*|rasppi-remote|docker*|containerd*|lightdm*|alsa-*|cups*|nfs-*|rpc-*|smartmontools*|e2scrub*|fstrim*|apt-*|dpkg-*|man-db*|logrotate*|getty*|serial-getty*|user@*|console-setup*|keyboard-setup*|fake-hwclock*|raspi-config*|rpi-eeprom-update*|dphys-swapfile*)
             continue
             ;;
         *)
@@ -390,7 +329,6 @@ ALLOWED_DIRECT_NETWORKS = [
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("100.64.0.0/10"),
 ]
 
 MAX_FAILED_ATTEMPTS = 5
@@ -467,9 +405,8 @@ COMMANDS = {
     "top_hogs": "/opt/rasppi-remote/top_hogs.sh",
     "net_info": """
         net_info() {
-            local LAN_IP TS_IP PING_MS WIFI_SIG NM_SIG DBM RX_GB;
+            local LAN_IP PING_MS WIFI_SIG NM_SIG DBM RX_GB;
             LAN_IP=$(hostname -I | awk '{print $1}');
-            TS_IP=$(tailscale ip -4 2> /dev/null | head -n1);
             PING_MS=$(ping -c 1 -W 2 1.1.1.1 2> /dev/null | awk -F'/' 'END{print $5}');
             WIFI_SIG=$(awk 'NR==3 {print int($3 * 100 / 70)"%"}' /proc/net/wireless 2> /dev/null);
             if [ -z "$WIFI_SIG" ] && command -v nmcli &> /dev/null; then
@@ -483,7 +420,6 @@ COMMANDS = {
                 fi;
             fi;
             echo "🏠 LAN: ${LAN_IP:-Disconnected}";
-            echo "🔒 VPN: ${TS_IP:-Offline}";
             if [ -n "$WIFI_SIG" ]; then
                 echo "📶 WiFi Signal: $WIFI_SIG";
             else
@@ -494,7 +430,7 @@ COMMANDS = {
             else
                 echo "❌ Ping: Offline";
             fi;
-            RX_GB=$(awk 'NR>2 && $1 !~ /^(lo|docker|veth|br-|tailscale)/ {rx+=$2} END {printf "%.1f GB", rx/1024/1024/1024}' /proc/net/dev);
+            RX_GB=$(awk 'NR>2 && $1 !~ /^(lo|docker|veth|br-)/ {rx+=$2} END {printf "%.1f GB", rx/1024/1024/1024}' /proc/net/dev);
             echo "📥 RX Total: $RX_GB";
         }
         net_info
@@ -514,7 +450,11 @@ def is_direct_ip_allowed(ip_str):
 
 def get_real_client_ip():
     remote_ip = request.remote_addr or "0.0.0.0"
-    if remote_ip == "127.0.0.1":
+    try:
+        trusted_proxy = ipaddress.ip_address(remote_ip).is_private
+    except ValueError:
+        trusted_proxy = False
+    if trusted_proxy:
         forwarded = request.headers.get("X-Forwarded-For", "")
         if forwarded:
             return forwarded.split(",")[0].strip()
@@ -700,8 +640,8 @@ def run_command(action_with_token):
         return jsonify({"status": "error", "wykonano": None, "output": f"ERROR:\n{str(e)}"}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('API_PORT', 8081))
-    serve(app, host='0.0.0.0', port=port)
+    port = int(os.environ.get('API_PORT', 8082))
+    serve(app, host=os.environ.get('API_HOST', '127.0.0.1'), port=port)
 EOF_PYTHON
 
 chown -R root:root "$APP_DIR"
@@ -719,9 +659,9 @@ fi
 echo "============================================================"
 echo "   RaspPi-Remote Admin (Garmin IQ) - Connection Details     "
 echo "============================================================"
-echo "1. Server URL:  https://${TS_DOMAIN}/api/run/"
+echo "1. Server URL:  https://${DOMAIN}/api/run/"
 echo "2. Token:       ${SECURITY_TOKEN}"
-echo "3. Internal:    http://127.0.0.1:${API_PORT}"
+echo "3. Internal:    http://${API_HOST}:${API_PORT}"
 echo "4. Service:     $(systemctl is-active rasppi-remote.service)"
 echo "5. Aliases:     ${USER_HOME}/.bash_aliases"
 echo "============================================================"
@@ -732,7 +672,8 @@ cat << EOF_ENV > /etc/default/rasppi-remote
 SECURITY_TOKEN=$SECRET_TOKEN
 API_PORT=$API_PORT
 USER_HOME=$USER_HOME
-TS_DOMAIN=$TS_DOMAIN
+DOMAIN=$DOMAIN
+API_HOST=$API_HOST
 EOF_ENV
 chmod 600 /etc/default/rasppi-remote
 chown root:root /etc/default/rasppi-remote
@@ -740,8 +681,8 @@ chown root:root /etc/default/rasppi-remote
 cat << 'EOF_SERVICE' > /etc/systemd/system/rasppi-remote.service
 [Unit]
 Description=RaspPi Remote Garmin API
-Wants=network-online.target tailscaled.service
-After=network-online.target tailscaled.service
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Environment="LANG=C.UTF-8"
@@ -765,7 +706,7 @@ systemctl restart rasppi-remote.service
 echo -e "\n============================================================"
 echo -e "            [+] INSTALLATION COMPLETE! [+]                  "
 echo -e "============================================================"
-echo -e "Server URL: https://${TS_DOMAIN}/api/run/"
+echo -e "Server URL: https://${DOMAIN}/api/run/"
 echo -e "Token:      ${SECRET_TOKEN}"
 echo -e ""
 echo -e "Tip: Run 'sudo rasppi-remote' anytime to view credentials."
