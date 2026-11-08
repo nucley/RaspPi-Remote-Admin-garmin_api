@@ -44,6 +44,8 @@ if [ -f /etc/default/rasppi-remote ]; then
     SECRET_TOKEN=$(grep "^SECURITY_TOKEN=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
     SAVED_DOMAIN=$(grep "^DOMAIN=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
     SAVED_PORT=$(grep "^API_PORT=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
+    SAVED_HOST=$(grep "^API_HOST=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
+    SAVED_PVE=$(grep "^PVE_HOST=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
 fi
 
 API_PORT=${API_PORT:-${SAVED_PORT:-8082}}
