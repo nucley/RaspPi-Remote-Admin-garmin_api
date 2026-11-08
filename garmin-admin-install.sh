@@ -342,7 +342,7 @@ COMMANDS = {
         CPU_FREQ=$(awk '{printf "%.2f", $1/1000000}' /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "N/A")
         TEMP=$(awk '{printf "%.1f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null || vcgencmd measure_temp 2>/dev/null | grep -o '[0-9.]*' || echo "N/A")
         echo "🍓 CPU: ${CPU_USAGE}% @${CPU_FREQ} GHz"
-        echo "🌡️ Temp: ${TEMP}°C"
+        [ "$TEMP" != "N/A" ] && [ -n "$TEMP" ] && echo "🌡️ Temp: ${TEMP}°C"
         echo "💻 RAM: $(free -m | awk 'NR==2 {print $3}') /$(free -m | awk 'NR==2 {print $2}') MB"
         echo "⚙️ Load: $(awk '{print $1, $2, $3}' /proc/loadavg)"
         echo "⏱️ Up: $(uptime -p | sed 's/up //; s/ days/d/; s/ day/d/; s/ hours/hrs/; s/ hour/hr/; s/ minutes/min/; s/ minute/min/')"
