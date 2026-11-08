@@ -21,4 +21,4 @@ Run the following command in your Raspberry Pi terminal:
 curl -sSL https://raw.githubusercontent.com/piotrkuzemczak-stack/RaspPi-Remote-Admin-garmin_api/main/garmin-admin-install.sh | sudo bash
 ```
 
-Defaults: domain `garmin.serverfra.ch`, listens on `127.0.0.1:8082`. Override with `DOMAIN=... API_PORT=... API_HOST=...`. Point your NPM proxy host at `http://127.0.0.1:8082` (or the host IP if NPM runs in Docker; then set `API_HOST=0.0.0.0`).
+Defaults: domain `garmin.serverfra.ch`, listens on `0.0.0.0:8082` (LAN only; do not forward it on your router). Override with `DOMAIN=... API_PORT=... API_HOST=...`. Point your NPM proxy host at `http://<server-LAN-IP>:8082`; set `API_HOST=127.0.0.1` if NPM runs directly on the host.

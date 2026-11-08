@@ -69,7 +69,7 @@ echo -e "    - ${TOKEN_MSG}\n"
 # Step 2: Domain configuration (reverse proxy handled externally, e.g. Nginx Proxy Manager)
 echo -e "${YELLOW}[Step 2/4] Configuring domain...${NC}"
 DOMAIN=${DOMAIN:-${SAVED_DOMAIN:-garmin.serverfra.ch}}
-API_HOST=${API_HOST:-${SAVED_HOST:-127.0.0.1}}
+API_HOST=${API_HOST:-${SAVED_HOST:-0.0.0.0}}
 echo -e "${GREEN}[+] Public URL: https://${DOMAIN} -> NPM -> http://${API_HOST}:${API_PORT}${NC}
 "
 
@@ -641,7 +641,7 @@ def run_command(action_with_token):
 
 if __name__ == '__main__':
     port = int(os.environ.get('API_PORT', 8082))
-    serve(app, host=os.environ.get('API_HOST', '127.0.0.1'), port=port)
+    serve(app, host=os.environ.get('API_HOST', '0.0.0.0'), port=port)
 EOF_PYTHON
 
 chown -R root:root "$APP_DIR"
