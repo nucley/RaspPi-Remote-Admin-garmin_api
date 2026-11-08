@@ -29,7 +29,7 @@ echo -e "${GREEN}[+] Internet connection is OK.${NC}\n"
 echo -e "${YELLOW}[Step 1/4] Installing system dependencies...${NC}"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq > /dev/null 2>&1
-apt-get install -y -qq sudo python3 python3-flask python3-waitress curl jq procps iproute2 iw util-linux coreutils i2c-tools gpiod > /dev/null 2>&1
+apt-get install -y -qq sudo python3 python3-flask python3-waitress curl jq openssh-client procps iproute2 iw util-linux coreutils i2c-tools gpiod > /dev/null 2>&1
 echo -e "${GREEN}[+] Dependencies installed successfully.${NC}\n"
 
 # Stop service if already running to free up its port before checking
@@ -39,6 +39,7 @@ SAVED_DOMAIN=""
 SECRET_TOKEN=""
 SAVED_PORT=""
 SAVED_HOST=""
+SAVED_PVE=""
 if [ -f /etc/default/rasppi-remote ]; then
     SECRET_TOKEN=$(grep "^SECURITY_TOKEN=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
     SAVED_DOMAIN=$(grep "^DOMAIN=" /etc/default/rasppi-remote 2>/dev/null | tr -d '\r' | cut -d'=' -f2- | head -n1 | tr -d '[:space:]' || true)
@@ -70,6 +71,7 @@ echo -e "    - ${TOKEN_MSG}\n"
 echo -e "${YELLOW}[Step 2/4] Configuring domain...${NC}"
 DOMAIN=${DOMAIN:-${SAVED_DOMAIN:-garmin.serverfra.ch}}
 API_HOST=${API_HOST:-${SAVED_HOST:-0.0.0.0}}
+PVE_HOST=${PVE_HOST:-${SAVED_PVE:-}}
 echo -e "${GREEN}[+] Public URL: https://${DOMAIN} -> NPM -> http://${API_HOST}:${API_PORT}${NC}
 "
 
@@ -341,6 +343,10 @@ COMMANDS = {
         CPU_USAGE=$(LC_ALL=C top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}')
         CPU_FREQ=$(awk '{printf "%.2f", $1/1000000}' /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "N/A")
         TEMP=$(awk '{printf "%.1f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null || vcgencmd measure_temp 2>/dev/null | grep -o '[0-9.]*' || echo "N/A")
+        if [ -r /opt/rasppi-remote/pve_key ] && [ -n "$PVE_HOST" ]; then
+            PVE_T=$(ssh -i /opt/rasppi-remote/pve_key -o BatchMode=yes -o ConnectTimeout=3 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/opt/rasppi-remote/pve_known_hosts root@"$PVE_HOST" 2>/dev/null | awk 'NF {printf "%.1f", $1/1000}')
+            [ -n "$PVE_T" ] && TEMP="$PVE_T"
+        fi
         echo "🍓 CPU: ${CPU_USAGE}% @${CPU_FREQ} GHz"
         [ "$TEMP" != "N/A" ] && [ -n "$TEMP" ] && echo "🌡️ Temp: ${TEMP}°C"
         echo "💻 RAM: $(free -m | awk 'NR==2 {print $3}') /$(free -m | awk 'NR==2 {print $2}') MB"
@@ -674,6 +680,7 @@ API_PORT=$API_PORT
 USER_HOME=$USER_HOME
 DOMAIN=$DOMAIN
 API_HOST=$API_HOST
+PVE_HOST=$PVE_HOST
 EOF_ENV
 chmod 600 /etc/default/rasppi-remote
 chown root:root /etc/default/rasppi-remote
